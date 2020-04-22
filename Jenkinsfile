@@ -94,32 +94,24 @@ node {
         }
 
         if(!cleanAks && !override){
-            stage('Checkout frontend service') {
-                dir('wsservice') {
-                    git "${env.SERVICE_URL}"
-                }
-            }
-
             //This will use the content of the package.json file and install any needed dependencies into /node-modules folder
             stage("Install npm dependencies") {
-                dir('wsservice') {
-                    configFileProvider([configFile(fileId: 'ae106d79-9e5d-4d2c-86f2-2f1827f8606f', replaceTokens: true, targetLocation: 'src/main/resources/config.properties', variable: 'databaseUrl')]) {
-                        sh "mvn clean package"
-                    }
-                }
+
+                configFileProvider([configFile(fileId: 'ae106d79-9e5d-4d2c-86f2-2f1827f8606f', replaceTokens: true, targetLocation: 'src/main/resources/config.properties', variable: 'databaseUrl')]) {
+                sh "mvn clean package"
+            }
+                
                 echo "dependencies install completed"            
             }
 
             if (buildImages) {
                 stage("Build Images") {
-                    dir('wsservice') {
-                        echo "setting version: BUILD_LABEL='${env.BUILD_LABEL}'; COMMIT_HASH='${env.COMMIT_HASH}'"
+                    echo "setting version: BUILD_LABEL='${env.BUILD_LABEL}'; COMMIT_HASH='${env.COMMIT_HASH}'"
 
-                        sh "docker build -f Dockerfile-hollow -t ${env.BUILD_LABEL}:${env.BUILD_VERSION} ."
+                    sh "docker build -f Dockerfile-hollow -t ${env.BUILD_LABEL}:${env.BUILD_VERSION} ."
 
-                        echo "Docker containers built with tag '${env.BUILD_LABEL}:${env.BUILD_VERSION}'"
-                        sh "docker images ${env.BUILD_LABEL}:${env.BUILD_VERSION}"
-                    }
+                    echo "Docker containers built with tag '${env.BUILD_LABEL}:${env.BUILD_VERSION}'"
+                    sh "docker images ${env.BUILD_LABEL}:${env.BUILD_VERSION}"
                 }
 
                 stage("Push Images") {
