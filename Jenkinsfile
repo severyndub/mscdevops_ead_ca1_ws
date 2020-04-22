@@ -27,7 +27,9 @@ node {
         targetEnv = params.TARGET_ENV?.trim()
         deploymentType = params.TARGET_ROLE?.trim()
         clearImages = params.CLEAR_IMAGES
-        cleanAks = params.CLEAN_AKS        
+        cleanAks = params.CLEAN_AKS
+        env.TARGET_ROLE = currentEnvironment
+        setupDns = params.SETUP_DNS      
 
         // Check if the build label is set
         if (buildImages) {
@@ -41,11 +43,9 @@ node {
             override = true
         }
 
-        //env.BUILD_LABEL = env.BUILD_LABEL + ':' + env.BUILD_VERSION
-
         switch(branch){
             case 'development':
-                env.TARGET_ROLE = 'blue'
+                //env.TARGET_ROLE = 'blue'
                 env.TARGET_PORT = '8080'
             break
             case 'master':
@@ -54,7 +54,7 @@ node {
             break
             default:
                 echo "branch is neither development or master, deploying to BLUE type"
-                env.TARGET_ROLE = 'blue'
+                //env.TARGET_ROLE = 'blue'
                 env.TARGET_PORT = "${TARGET_PORT_MAN}"
         }
 
@@ -71,10 +71,11 @@ node {
             TARGET_ROLE: '$env.TARGET_ROLE'
             overrideVersion: '${overrideVersion}'
             TARGET PORT: '${env.TARGET_PORT}'
+            setupDns: '${setupDns}'
         """
 
         if(cleanAks) {
-            withCredentials([azureServicePrincipal('72555f61-7a9f-4145-8bb7-a163f107bccf')]) {
+            withCredentials([azureServicePrincipal(servicePrincipalId)]) {
                 // Login to azure
                 sh 'az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET -t $AZURE_TENANT_ID'
                 // Set subscription context
@@ -100,6 +101,7 @@ node {
         }
 
         if(!cleanAks && !override){
+
             //This will use the content of the package.json file and install any needed dependencies into /node-modules folder
             stage("Install npm dependencies") {
 
@@ -129,34 +131,107 @@ node {
    
         }
 
+        if(setupDns){
+            stage('Setup services'){
+                withCredentials([azureServicePrincipal(servicePrincipalId)]) {
+                    sh """
+                        az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET -t $AZURE_TENANT_ID
+                        az account set -s $AZURE_SUBSCRIPTION_ID
+                        az aks get-credentials --overwrite-existing --resource-group mscdevops-aks-rg --name mscdevops-aks --admin --file kubeconfig
+                        bash aks/setup/setup_dns.sh
+                        az logout
+                    """
+                }
+            }
+        }
+
+        stage('Check Env') {
+        // check the current active environment to determine the inactive one that will be deployed to
+
+            withCredentials([azureServicePrincipal(servicePrincipalId)]) {
+                // fetch the current service configuration
+                sh """
+                    az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET -t $AZURE_TENANT_ID
+                    az account set -s $AZURE_SUBSCRIPTION_ID
+                    az aks get-credentials --overwrite-existing --resource-group mscdevops-aks-rg --name mscdevops-aks --admin --file kubeconfig
+                    current_role="\$(kubectl --kubeconfig kubeconfig get services svc-ws-service --output json | jq -r .spec.selector.deployment)"
+                    if [ "\$current_role" = null ]; then
+                      echo "Unable to determine current environment"
+                      exit 1
+                    fi
+                    echo "\$current_role" >current-environment
+                    az logout
+                """
+            }
+
+            // parse the current active backend
+            currentEnvironment = readFile('current-environment').trim()
+
+            // set the build name
+            echo "***************************  CURRENT: $currentEnvironment     NEW: ${newEnvironment()}  *****************************"
+            currentBuild.displayName = newEnvironment().toUpperCase() + ' ' + "${env.BUILD_LABEL}:${env.BUILD_VERSION}"
+
+            env.TARGET_ROLE = newEnvironment()
+        }      
+
         stage("Queue deploy") {
 
             echo "Queueing Deploy job (${targetEnv}, ${env.BUILD_LABEL})."
 
-            acsDeploy(azureCredentialsId: '72555f61-7a9f-4145-8bb7-a163f107bccf',
+            acsDeploy(azureCredentialsId: servicePrincipalId,
                 resourceGroupName: 'mscdevops-aks-rg',
                 containerService: 'mscdevops-aks | AKS',
                 sshCredentialsId: '491fabd9-2952-4e79-9192-66b52c9dd389',
-                configFilePaths: '**/backend/*.yaml',
+                configFilePaths: '**/backend/deploy.yaml',
                 enableConfigSubstitution: true,
 
                 // Kubernetes
                 secretName: 'mscdevops',
                 secretNamespace: 'default',
 
-                // Docker Swarm
-                swarmRemoveContainersFirst: true,
-
-                // DC/OS Marathon
-                //dcosDockerCredentialsPath: '<dcos-credentials-path>',
-
             containerRegistryCredentials: [
                 [credentialsId: 'dockerRegAccess', url: 'mcsdevopsentarch.azurecr.io'] ])
         }
 
-        stage("Get container public ip"){
-            //sh "kubectl describe services svc-ws-service-${env.TARGET_ROLE} | grep 'LoadBalancer Ingress:' | awk '{printf \"%s\\n\", \$3}'"
-            sh "kubectl get service svc-ws-service-${env.TARGET_ROLE} | awk '{printf \"%s\\n\", \$4}'"
+        def verifyEnvironment = { service ->
+            sh """
+              endpoint_ip="\$(kubectl get services '${service}' --output json | jq -r '.status.loadBalancer.ingress[0].ip')"
+              count=0
+              while true; do
+                  count=\$(expr \$count + 1)
+                  if curl -m 10 "http://\$endpoint_ip"; then
+                      break;
+                  fi
+                  if [ "\$count" -gt 30 ]; then
+                      echo 'Timeout while waiting for the ${service} endpoint to be ready'
+                      exit 1
+                  fi
+                  echo "${service} endpoint is not ready, wait 10 seconds..."
+                  sleep 10
+              done
+            """
+        }
+
+        stage('Verify Staged') {
+            // verify the deployment through the corresponding test endpoint
+            verifyEnvironment("svc-test-ws-service-${newEnvironment()}")
+        }
+    
+        stage('Switch') {
+            // Update the production service endpoint to route to the new environment.
+            // With enableConfigSubstitution set to true, the variables ${TARGET_ROLE}
+            // will be replaced with environment variable values
+            acsDeploy azureCredentialsId: servicePrincipalId,
+                      resourceGroupName: 'mscdevops-aks-rg',
+                      containerService: "mscdevops-aks | AKS",
+                      sshCredentialsId: '491fabd9-2952-4e79-9192-66b52c9dd389',
+                      configFilePaths: '**/backend/service.yaml',
+                      enableConfigSubstitution: true
+        }
+    
+        stage('Verify Prod') {
+            // verify the production environment is working properly
+            verifyEnvironment('svc-ws-service')
         }
 
     } catch (e) {

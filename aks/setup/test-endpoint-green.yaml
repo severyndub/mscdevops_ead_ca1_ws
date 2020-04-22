@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-test-ws-service-green
+spec:
+  type: LoadBalancer
+  selector:
+    app: ws-service
+    deployment: green
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 80
