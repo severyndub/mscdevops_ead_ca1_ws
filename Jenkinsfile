@@ -212,10 +212,10 @@ node {
             """
         }
 
-        stage('Verify Staged') {
-            // verify the deployment through the corresponding test endpoint
-            verifyEnvironment("svc-test-ws-service-${newEnvironment()}")
-        }
+        // stage('Verify Staged') {
+        //     // verify the deployment through the corresponding test endpoint
+        //     verifyEnvironment("svc-test-ws-service-${newEnvironment()}")
+        // }
     
         stage('Switch') {
             // Update the production service endpoint to route to the new environment.
@@ -229,10 +229,10 @@ node {
                       enableConfigSubstitution: true
         }
     
-        stage('Verify Prod') {
-            // verify the production environment is working properly
-            verifyEnvironment('svc-ws-service')
-        }
+        // stage('Verify Prod') {
+        //     // verify the production environment is working properly
+        //     verifyEnvironment('svc-ws-service')
+        // }
 
     } catch (e) {
         throw e
