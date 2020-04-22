@@ -1,0 +1,57 @@
+# Maven
+# Build your Java project and run tests with Apache Maven.
+# Add steps that analyze code, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/java
+
+trigger:
+- master
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+- task: Maven@3
+  displayName: 'jar and war files'
+  inputs:
+    mavenPomFile: 'pom.xml'
+    mavenOptions: '-Xmx3072m'
+    javaHomeOption: 'JDKVersion'
+    jdkVersionOption: '1.8'
+    jdkArchitectureOption: 'x64'
+    publishJUnitResults: true
+    testResultsFiles: '**/surefire-reports/TEST-*.xml'
+    goals: 'package'
+
+- task: Docker@2
+  displayName: 'Build and Push Hollow Image'
+  inputs:
+    containerRegistry: 'knolanacr'
+    repository: '$(hollowImageName):$(version)'
+    command: 'buildAndPush'
+    Dockerfile: '**/Dockerfile-hollow'
+    tags: 
+
+- task: CmdLine@2
+  displayName: 'Replace version number'
+  inputs:
+    script: 'sed -i ''''s/bprestws-hollow:latest/$(hollowImageName):$(version)/g'''' Dockerfile-thinwar'
+
+- task: Docker@2
+  inputs:
+    containerRegistry: 'knolanacr'
+    repository: '$(thinImageName):$(version)'
+    command: 'buildAndPush'
+    Dockerfile: '**/Dockerfile-thinwar'
+    tags: 
+
+- task: CmdLine@2
+  displayName: 'Update version in manifest'
+  inputs:
+    script: 'sed -i ''''s/bprestws-thinwar:latest/$(thinImageName):$(version)/g'''' create-thin-service-manifest.yaml'
+
+- task: PublishPipelineArtifact@1
+  inputs:
+    targetPath: 'create-thin-service-manifest.yaml'
+    artifact: 'YAML'
+    publishLocation: 'pipeline'
+

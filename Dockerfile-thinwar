@@ -1,0 +1,6 @@
+FROM knolanacr.azurecr.io/bprestws-hollow:latest
+
+EXPOSE 8080
+
+copy target/BPRestWS-1.0-SNAPSHOT.war .
+CMD ["java", "-Djava.net.preferIPv4Stack=true", "-jar", "BPRestWS-1.0-SNAPSHOT-hollow-thorntail.jar", "BPRestWS-1.0-SNAPSHOT.war"]
