@@ -8,6 +8,12 @@
     def branch = env.GIT_BRANCH?.trim().split('/').last().toLowerCase() //master
     def overrideVersion = params.BUILD_VERSION_OVERRIDE?.trim()
     boolean override = false
+    def servicePrincipalId = '72555f61-7a9f-4145-8bb7-a163f107bccf'
+    def currentEnvironment = 'blue'
+    def newEnvironment = { ->
+        currentEnvironment == 'blue' ? 'green' : 'blue'
+    }
+    boolean setupDns = false
 
 node {
 
