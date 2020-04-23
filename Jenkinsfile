@@ -2,7 +2,6 @@
 
     boolean buildImages = false
     def targetEnv = ""
-    def deploymentType = ""
     boolean clearImages = true
     boolean cleanAks = false
     def branch = env.GIT_BRANCH?.trim().split('/').last().toLowerCase() //master
@@ -25,7 +24,6 @@ node {
         env.BUILD_LABEL = params.BUILD_LABEL?.trim()
         buildImages = params.BUILD_IMAGES
         targetEnv = params.TARGET_ENV?.trim()
-        deploymentType = params.TARGET_ROLE?.trim()
         clearImages = params.CLEAR_IMAGES
         cleanAks = params.CLEAN_AKS
         env.TARGET_ROLE = currentEnvironment
@@ -50,7 +48,6 @@ node {
             buildImages: '${buildImages}'
             targetEnv: '${targetEnv}'
             clearImages: '${clearImages}'
-            deploymentType: '${deploymentType}'
             cleanAks: '${cleanAks}'
             REPLICAS NO: '$env.REPLICAS_NO'
             TARGET_ROLE: '$env.TARGET_ROLE'
@@ -70,12 +67,15 @@ node {
 
                 // Navigate to ws-service deployment directory
                 dir('aks/backend'){
-                // Deploy the service
-                sh "kubectl delete deployment ws-service-${env.TARGET_ROLE}"
-                sh "kubectl delete services svc-ws-service-${env.TARGET_ROLE}"
+                    // Deploy the service
+                    sh "kubectl get deployments -n default --no-headers=true | awk '/ws-service/{print \$1}' | xargs kubectl delete -n default deployment"
+                    sh "kubectl get services -n default --no-headers=true | awk '/ws-service/{print \$1}' | xargs kubectl delete -n default service"
+                }
+                // If setup dns is not set to true exit right after cleaning the cluster
+                if (!setupDns){
+                    return 0
                 }
             }
-            return 0
         }
         
         stage("Pull Source") {

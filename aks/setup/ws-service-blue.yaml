@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: svc-test-ws-service-blue
+  name: svc-ws-service-blue
 spec:
   type: LoadBalancer
   selector:

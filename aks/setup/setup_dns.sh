@@ -51,9 +51,9 @@ function assign_dns {
     [[ $? != 0 ]] && exit 1
 }
 
-assign_dns svc-fe-service "aks-ws-service-$dns_name_suffix"
-assign_dns svc-test-fe-service-blue "aks-ws-service-blue-$dns_name_suffix"
-assign_dns svc-test-fe-service-green "aks-ws-service-green-$dns_name_suffix"
+assign_dns svc-ws-service "aks-ws-service-$dns_name_suffix"
+assign_dns svc-ws-service-blue "aks-ws-service-blue-$dns_name_suffix"
+assign_dns svc-ws-service-green "aks-ws-service-green-$dns_name_suffix"
 
 rm -f "$kubeconfig"
 
