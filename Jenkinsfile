@@ -68,13 +68,14 @@ node {
                 // Navigate to ws-service deployment directory
                 dir('aks/backend'){
                     // Deploy the service
-                    sh "kubectl get deployments -n default --no-headers=true | awk '/ws-service/{print \$1}' | xargs kubectl delete -n default deployment"
-                    sh "kubectl get services -n default --no-headers=true | awk '/ws-service/{print \$1}' | xargs kubectl delete -n default service"
+                    sh "kubectl get deployments -n default --no-headers=true | awk \'/ws-service/{print \$1}\' | xargs kubectl delete -n default deployment"
+                    sh "kubectl get services -n default --no-headers=true | awk \'/ws-service/{print \$1}\' | xargs kubectl delete -n default service"
                 }
-                // If setup dns is not set to true exit right after cleaning the cluster
-                if (!setupDns){
-                    return 0
-                }
+            }
+            // If setup dns is not set to true exit right after cleaning the cluster   
+            if (!setupDns){
+                echo "EXIT NOW!"
+                return 0
             }
         }
         
