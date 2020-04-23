@@ -43,21 +43,6 @@ node {
             override = true
         }
 
-        switch(branch){
-            case 'development':
-                //env.TARGET_ROLE = 'blue'
-                env.TARGET_PORT = '8080'
-            break
-            case 'master':
-                env.TARGET_ROLE = 'green'
-                env.TARGET_PORT = '80'
-            break
-            default:
-                echo "branch is neither development or master, deploying to BLUE type"
-                //env.TARGET_ROLE = 'blue'
-                env.TARGET_PORT = "${TARGET_PORT_MAN}"
-        }
-
         echo """Parameters:
             branch: '${branch}' 
             BUILD LABEL: '$env.BUILD_LABEL'
