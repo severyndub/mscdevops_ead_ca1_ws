@@ -199,7 +199,7 @@ node {
 
         // stage('Verify Staged') {
         //     // verify the deployment through the corresponding test endpoint
-        //     verifyEnvironment("svc-test-ws-service-${newEnvironment()}")
+        //     verifyEnvironment("svc-ws-service-${newEnvironment()}")
         // }
     
         stage('Switch') {
